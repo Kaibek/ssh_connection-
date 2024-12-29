@@ -2,6 +2,8 @@ import paramiko
 import datetime
 import os
 import logging
+#Этот скрипт предназначен для автоматизации процесса, для получения метрики, создание бэкапа Zabbix на сервере# и cкачивание бэкапа на локальную машину или ПК.
+
 
 # Настройка логгера 
 logging.basicConfig(
