@@ -49,7 +49,7 @@ def check_system_metrics(ssh):
         logger.error(f"Не удалось собрать метки: {error}")
 
 
-def ssh_connection(ip_address, username, password):
+def ssh_connection(ip_address, username, password, local_backup_path):
 
     with paramiko.SSHClient() as ssh:
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -59,6 +59,11 @@ def ssh_connection(ip_address, username, password):
             ssh.connect(ip_address, username=username, password=password)
             logger.info(f"Successfully connected to {ip_address}")
             check_system_metrics(ssh)
+            backup_folder = "/tmp/zabbix_backup"
+            remote_backup_path = create_zabbix_backup(ssh, backup_folder)
+
+            if remote_backup_path:
+                download_backup_from_server(ssh, remote_backup_path, local_backup_path)
 
         except paramiko.AuthenticationException as error:
             logger.error(f" Incorrect data {error} to {ip_address}")
@@ -116,11 +121,16 @@ def download_backup_from_server(ssh, remote_path, local_path):
 # Основная логика
 if __name__ == "__main__":
     # Данные для подключения
-    server_ip = "192.168.1.111"
-    username = "zabbix"
-    password = "12345"
+    server_ip = "ip-address"
+    username = "username"
+    password = "paswword"
 
     # Локальный путь для сохранения резервной копии
+    desktop_path = r"C:\Users\User\Desktop"
+    local_backup_path = os.path.join(desktop_path, "backup.tgz")
+
+    ssh_connection(server_ip, username, password, local_backup_path)
+
     desktop_path = r"C:\Users\User\Desktop"
     local_backup_path = os.path.join(desktop_path, "backup.tgz")
 
