@@ -16,49 +16,96 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def check_system_metrics(ssh):
+
+def check_system_metrics(ssh, local_metric_path):
 # Проверка использование CPU и RAM на сервере через SSH
-
-
     try:
-        stdin, stdout, stderr = ssh.exec_command("top -bn1 | grep 'Cpu(s)' && free -m")
-        General_metric = stdout.read().decode()
+        commands = [
+            f"top -bn1 | grep 'Cpu(s)'",
+            f"free -m",
+            f"vnstat -i any",
+            f"netstat -s",
+            f"df -h"
+        ]
 
-        docker_status = ssh.exec_command("systemctl status docker || service docker status")[1].read().decode()
+        all_metrics = ""
 
-        network_usage = ssh.exec_command("vnstat -i any")[1].read().decode()
-
-        netstat_info = ssh.exec_command("netstat -s")[1].read().decode()
-
-        disk_usage = ssh.exec_command("df -h")[1].read().decode()
-
-
-        all_metrics = (f"Общии метрики: {General_metric}\n Состояние Docker: {docker_status}\n, Состояние интеренет трвфика:"
-                      f"{network_usage}\n, состояние нагрузки сети:{netstat_info}\n, состояние диска: {disk_usage}\n")
+        for command in commands:
+            stdin, stdout, stderr = ssh.exec_command(command)
+            all_metrics += f"Результат выполнения команды '{command}':\n{stdout.read().decode()}\n"
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"server_metrics_{timestamp}.txt"
+        metric_filename = f"server_metrics_{timestamp}.txt"
+        local_metric_full_path = os.path.join(local_metric_path, metric_filename)
 
-
-        with open(filename, "w") as file:
+        with open(local_metric_full_path, "w") as file:
             file.write(all_metrics)
 
-        logger.info(f"Метки собраны и сохранены в файле {filename}")
+        logger.info(f"Метрики собраны и сохранены в файл: {local_metric_full_path}")
 
-    except Exception as error:
-        logger.error(f"Не удалось собрать метки: {error}")
+    except Exception as e:
+        logger.error(f"Не удалось собрать метрики: {e}")
 
 
-def ssh_connection(ip_address, username, password, local_backup_path):
+
+def create_zabbix_backup(ssh, backup_folder):
+    # Создает резервную копию Zabbix на сервере и возвращает путь к архиву (.tgz).
+    backup_file = f"zabbix_backup_{datetime.now().strftime('%Y%m%d%H%M%S')}.tgz"
+    backup_path = f"{backup_folder}/{backup_file}"
+
+    # Команды для создания резервной копии с использованием tar
+    commands = [
+        f"mkdir -p {backup_folder}",
+        f"echo {password} | sudo -S tar -C /var/lib/docker/volumes/zabbix-docker_zabbix_postgresql_data -czf {backup_path} ."
+    ]
+
+    try:
+        for cmd in commands:
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            stderr_output = stderr.read().decode()
+
+            if stderr_output:
+
+                logger.warning(f"Ошибка при выполнении команды: {stderr_output}")
+
+        logger.info(f"Резервная копия создана: {backup_path}")
+
+        return backup_path
+
+    except Exception as e:
+        logger.error(f"Ошибка при создании резервной копии: {e}")
+        return None
+
+
+
+def download_backup_from_server(ssh, remote_path, local_path):
+# Скачивает резервную копию с сервера на локальный ПК.
+
+    try:
+        with ssh.open_sftp() as sftp:
+            sftp.get(remote_path, local_path, )
+
+        logger.info(f"Резервная копия скачана: {local_path}")
+
+    except FileNotFoundError:
+        logger.error(f"Файл не найден на сервере: {remote_path}")
+
+    except Exception as e:
+        logger.error(f"Ошибка при скачивании файла: {e}")
+
+
+
+def ssh_connection(ip_address, username, password, local_backup_path, local_metric_path):
 
     with paramiko.SSHClient() as ssh:
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-
         try:
             ssh.connect(ip_address, username=username, password=password)
             logger.info(f"Successfully connected to {ip_address}")
-            check_system_metrics(ssh)
+
+            check_system_metrics(ssh, local_metric_path)
+
             backup_folder = "/tmp/zabbix_backup"
             remote_backup_path = create_zabbix_backup(ssh, backup_folder)
 
@@ -75,62 +122,21 @@ def ssh_connection(ip_address, username, password, local_backup_path):
             logger.error(f" {error}")
 
 
-def create_zabbix_backup(ssh, backup_folder):
-    # Создает резервную копию Zabbix на сервере и возвращает путь к архиву (.tgz).
-    backup_file = f"zabbix_backup_{datetime.now().strftime('%Y%m%d%H%M%S')}.tgz"
-    backup_path = f"{backup_folder}/{backup_file}"
-
-    # Команды для создания резервной копии с использованием tar
-    commands = [
-        f"mkdir -p {backup_folder}",
-        f"echo {password} | sudo -S tar -C /var/lib/docker/volumes/zabbix-docker_zabbix_postgresql_data -czf {backup_path} ."
-    ]
-
-
-    try:
-        for cmd in commands:
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            stderr_output = stderr.read().decode()
-
-            if stderr_output:
-                logger.warning(f"Ошибка при выполнении команды: {stderr_output}")
-
-        logger.info(f"Резервная копия создана: {backup_path}")
-        return backup_path
-
-    except Exception as e:
-        logger.error(f"Ошибка при создании резервной копии: {e}")
-        return None
-
-def download_backup_from_server(ssh, remote_path, local_path):
-# Скачивает резервную копию с сервера на локальный ПК.
-
-    try:
-        with ssh.open_sftp() as sftp:
-            sftp.get(remote_path, local_path)
-
-        logger.info(f"Резервная копия скачана: {local_path}")
-
-    except FileNotFoundError:
-        logger.error(f"Файл не найден на сервере: {remote_path}")
-
-    except Exception as e:
-        logger.error(f"Ошибка при скачивании файла: {e}")
-
-
 # Основная логика
 if __name__ == "__main__":
     # Данные для подключения
-    server_ip = "ip-address"
-    username = "username"
-    password = "paswword"
+    server_ip = "192.168.1.111"
+    username = "zabbix"
+    password = "12345"
 
     # Локальный путь для сохранения резервной копии
     desktop_path = r"C:\Users\User\Desktop"
     local_backup_path = os.path.join(desktop_path, "backup.tgz")
+    local_metric_path = os.path.join(desktop_path)
 
-    ssh_connection(server_ip, username, password, local_backup_path)
+    if not os.path.exists(local_metric_path):
+        os.makedirs(local_metric_path)
 
-    desktop_path = r"C:\Users\User\Desktop"
-    local_backup_path = os.path.join(desktop_path, "backup.tgz")
+    ssh_connection(server_ip, username, password, local_backup_path, local_metric_path)
+
 
