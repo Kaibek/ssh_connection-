@@ -125,8 +125,8 @@ def ssh_connection(ip_address, username, password, local_backup_path, local_metr
 # Основная логика
 if __name__ == "__main__":
     # Данные для подключения
-    server_ip = "192.168.1.111"
-    username = "zabbix"
+    server_ip = "192.168.1.1"
+    username = "admin"
     password = "12345"
 
     # Локальный путь для сохранения резервной копии
