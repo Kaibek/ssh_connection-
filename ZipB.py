@@ -1,7 +1,8 @@
 import paramiko
-import datetime
 import os
 import logging
+from datetime import datetime
+
 #Этот скрипт предназначен для автоматизации процесса, для получения метрики, создание бэкапа Zabbix на сервере# и cкачивание бэкапа на локальную машину или ПК.
 
 
@@ -20,17 +21,35 @@ def check_system_metrics(ssh):
 
     try:
         stdin, stdout, stderr = ssh.exec_command("top -bn1 | grep 'Cpu(s)' && free -m")
-        output = stdout.read().decode()
-        logger.info(f"Системные метрики:\n{output}")
+        G_metric = stdout.read().decode()
 
-    except Exception as e:
-        logger.error(f"Ошибка при получении метрик: {e}")
+        docker_status = ssh.exec_command("systemctl status docker || service docker status")[1].read().decode()
 
+        network_usage = ssh.exec_command("vnstat -i any")[1].read().decode()
+
+        netstat_info = ssh.exec_command("netstat -s")[1].read().decode()
+
+        disk_usage = ssh.exec_command("df -h")[1].read().decode()
+
+
+        all_metrics = (f"Общии метрики: {G_metric}\n Состояние Docker: {docker_status}\n, Состояние интеренет трвфика:"
+                      f"{network_usage}\n, состояние нагрузки сети:{netstat_info}\n, состояние диска: {disk_usage}")
+
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"server_metrics_{timestamp}.txt"
+        with open(filename, "w") as file:
+            file.write(all_metrics)
+
+        logger.info(f"Метки собраны и сохранены в файле {filename}")
+
+    except Exception as error:
+        logger.error(f"Не удалось собрать метки: {error}")
 
 
 def create_zabbix_backup(ssh, backup_folder):
     # Создает резервную копию Zabbix на сервере и возвращает путь к архиву (.tgz).
-    backup_file = f"zabbix_backup_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.tgz"
+    backup_file = f"zabbix_backup_{datetime.now().strftime('%Y%m%d%H%M%S')}.tgz"
     backup_path = f"{backup_folder}/{backup_file}"
 
     # Команды для создания резервной копии с использованием tar
