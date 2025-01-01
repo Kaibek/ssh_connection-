@@ -5,8 +5,11 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
+
 # Код представляет собой графическое приложение для создания SSH-соединений, сбора системных метрик, создания и скачивания резервных копий данных Zabbix с Ubuntu 24.04 LTS сервера, подойдет для простых задач, таким как Сетевикам или сис.админам 
-# Настройка логгера
+# by (c) Kalimollayev Bekzhan.
+
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)-8s %(message)s',
@@ -49,11 +52,9 @@ def check_system_metrics(ssh, local_metric_path):
 
 def create_zabbix_backup(ssh, backup_folder, zabbix_data_path, password):
 
-    # Путь и имя для резервной копии
     backup_file = f"zabbix_backup_{datetime.now().strftime('%Y%m%d%H%M%S')}.tgz"
     backup_path = f"{backup_folder}/{backup_file}"
 
-    # Команда для создания бэкапа
     command = f"echo {password} | sudo -S tar -C {zabbix_data_path} -czf {backup_path} ."
 
     try:
