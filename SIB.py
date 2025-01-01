@@ -189,6 +189,8 @@ class SSHApp:
             self.entry_metric_path.delete(0, tk.END)
             self.entry_metric_path.insert(0, metric_path)
 
+
+    
     def browse_zabbix_data(self):
 
         zabbix_data_path = filedialog.askdirectory(title="Выберите папку с данными Zabbix")
@@ -249,6 +251,7 @@ class SSHApp:
 
 
 
+#------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
 
     root = tk.Tk()
